@@ -9,21 +9,31 @@ import threading
 class MouseClicker:
     """鼠标自动点击器"""
 
-    def __init__(self, clicks_per_second: int = 2, run_duration: float = None):
+    def __init__(self, clicks_per_second: int = 2, run_duration: float = None, log_callback=None):
         """
         初始化点击器
 
         Args:
             clicks_per_second: 每秒点击次数，默认2次
             run_duration: 运行时长（秒），None表示无限运行
+            log_callback: 日志回调函数，签名为 (level, message) -> None
         """
         self.clicks_per_second = clicks_per_second
         self.run_duration = run_duration
         self.running = False
         self.thread = None
         self.start_time = None
+        self.log_callback = log_callback
+        self.click_count = 0
         # 设置点击间隔（秒）
         self.interval = 1.0 / clicks_per_second
+
+    def _log(self, level: str, message: str):
+        """记录日志"""
+        if self.log_callback:
+            self.log_callback(level, message)
+        else:
+            print(f"[{level}] {message}")
 
     def get_target_position(self, rows: int = 2, cols: int = 3,
                            target_row: int = 1, target_col: int = 2) -> tuple:
@@ -54,40 +64,50 @@ class MouseClicker:
     def _click_loop(self):
         """点击循环（在独立线程中运行）"""
         self.start_time = time.time()
+        self.click_count = 0
         while self.running:
             # 检查运行时长
             if self.run_duration and (time.time() - self.start_time) >= self.run_duration:
-                print(f"[时间到] 运行时长 {self.run_duration} 秒已到，自动停止")
+                self._log("INFO", f"运行时长 {self.run_duration} 秒已到，自动停止")
                 self.running = False
                 break
 
-            # 第二行第三列 (2行3列，索引从0开始)
-            x, y = self.get_target_position(rows=2, cols=3, target_row=1, target_col=2)
-            pyautogui.click(x, y)
-            print(f"[点击] 第2行第3列: ({x}, {y}) - {time.strftime('%H:%M:%S')}")
-            time.sleep(self.interval)
+            try:
+                # 第二行第三列 (2行3列，索引从0开始)
+                x, y = self.get_target_position(rows=2, cols=3, target_row=1, target_col=2)
+                pyautogui.click(x, y)
+                self.click_count += 1
+                self._log("INFO", f"点击: ({x}, {y}) - 总次数: {self.click_count}")
+                time.sleep(self.interval)
+            except Exception as e:
+                self._log("ERROR", f"点击失败: {str(e)}")
+                time.sleep(1)
 
     def start(self):
         """启动自动点击"""
         if self.running:
-            print("[警告] 点击器已在运行中")
+            self._log("WARN", "点击器已在运行中")
             return
 
         self.running = True
         self.thread = threading.Thread(target=self._click_loop, daemon=True)
         self.thread.start()
-        print(f"[启动] 自动点击器已启动 - 每秒 {self.clicks_per_second} 次")
+        self._log("INFO", f"前台点击器已启动 - 每秒 {self.clicks_per_second} 次")
 
     def stop(self):
         """停止自动点击"""
         if not self.running:
-            print("[警告] 点击器未在运行")
+            self._log("WARN", "点击器未在运行")
             return
 
         self.running = False
         if self.thread:
             self.thread.join(timeout=1)
-        print("[停止] 自动点击器已停止")
+        self._log("INFO", f"前台点击器已停止 - 总点击次数: {self.click_count}")
+
+    def get_click_count(self) -> int:
+        """获取点击次数"""
+        return self.click_count
 
     def is_running(self) -> bool:
         """检查是否正在运行"""

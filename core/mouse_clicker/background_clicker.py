@@ -18,7 +18,7 @@ import win32api  # 修复：提前导入，避免函数内引用报错
 class BackgroundClicker:
     """后台鼠标点击器（适配网易GL模拟器）"""
 
-    def __init__(self, target_process: str = "GLEmulator.exe", clicks_per_second: int = 2, run_duration: float = None):
+    def __init__(self, target_process: str = "GLEmulator.exe", clicks_per_second: int = 2, run_duration: float = None, log_callback=None):
         """
         初始化后台点击器
 
@@ -26,6 +26,7 @@ class BackgroundClicker:
             target_process: 目标进程名称（如 GLEmulator.exe）
             clicks_per_second: 每秒点击次数（默认2次）
             run_duration: 运行时长（秒），None表示无限运行
+            log_callback: 日志回调函数，签名为 (level, message) -> None
         """
         # 基础配置
         self.target_process = target_process
@@ -37,6 +38,15 @@ class BackgroundClicker:
         self.thread = None
         self.target_hwnd = None  # 目标窗口句柄
         self.start_time = None
+        self.log_callback = log_callback
+        self.click_count = 0
+
+    def _log(self, level: str, message: str):
+        """记录日志"""
+        if self.log_callback:
+            self.log_callback(level, message)
+        else:
+            print(f"[{level}] {message}")
 
     def find_target_window(self):
         """查找目标进程的主窗口（返回第一个可见窗口）"""
@@ -147,18 +157,19 @@ class BackgroundClicker:
     def _click_loop(self):
         """后台点击循环（守护线程运行）"""
         self.start_time = time.time()
+        self.click_count = 0
         while self.running:
             try:
                 # 检查运行时长
                 if self.run_duration and (time.time() - self.start_time) >= self.run_duration:
-                    print(f"[时间到] 运行时长 {self.run_duration} 秒已到，自动停止")
+                    self._log("INFO", f"运行时长 {self.run_duration} 秒已到，自动停止")
                     self.running = False
                     break
 
                 # 1. 查找目标窗口（每次循环检查，适配窗口重启）
                 self.target_hwnd = self.find_target_window()
                 if not self.target_hwnd:
-                    print(f"[警告] 未找到进程 {self.target_process}，1秒后重试...")
+                    self._log("WARN", f"未找到进程 {self.target_process}，1秒后重试...")
                     time.sleep(1)
                     continue
 
@@ -167,41 +178,45 @@ class BackgroundClicker:
 
                 # 3. 发送点击
                 self.send_click(x, y)
+                self.click_count += 1
 
                 # 4. 打印日志
-                log_time = time.strftime("%H:%M:%S")
-                print(f"[成功] {log_time} - 点击按钮：({x}, {y})")
+                self._log("INFO", f"点击按钮: ({x}, {y}) - 总次数: {self.click_count}")
 
                 # 5. 间隔等待
                 time.sleep(self.interval)
 
             except Exception as e:
-                print(f"[错误] 点击失败：{str(e)}，1秒后重试...")
+                self._log("ERROR", f"点击失败: {str(e)}，1秒后重试...")
                 time.sleep(1)
 
     def start(self):
         """启动后台点击器"""
         if self.running:
-            print("[警告] 点击器已在运行中，无需重复启动")
+            self._log("WARN", "点击器已在运行中，无需重复启动")
             return
 
         self.running = True
         # 启动守护线程（主进程退出时自动结束）
         self.thread = threading.Thread(target=self._click_loop, daemon=True)
         self.thread.start()
-        print(f"[启动] 后台点击器已启动 - 目标进程：{self.target_process} | 点击频率：{self.clicks_per_second}次/秒")
+        self._log("INFO", f"后台点击器已启动 - 目标进程: {self.target_process} | 点击频率: {self.clicks_per_second}次/秒")
 
     def stop(self):
         """停止后台点击器"""
         if not self.running:
-            print("[警告] 点击器未运行，无需停止")
+            self._log("WARN", "点击器未运行，无需停止")
             return
 
         self.running = False
         # 等待线程退出（超时1秒）
         if self.thread and self.thread.is_alive():
             self.thread.join(timeout=1)
-        print("[停止] 后台点击器已停止")
+        self._log("INFO", f"后台点击器已停止 - 总点击次数: {self.click_count}")
+
+    def get_click_count(self) -> int:
+        """获取点击次数"""
+        return self.click_count
 
     def is_running(self) -> bool:
         """检查点击器是否运行"""
