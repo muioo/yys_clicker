@@ -1,4 +1,16 @@
+# 鼠标连点器依赖包
+
+# GUI 界面
+# tkinter (Python 内置，无需安装)
+
+# 鼠标控制
 pyautogui>=0.9.54
+
+# 快捷键监听
 keyboard>=0.13.5
+
+# Windows API (后台点击)
 pywin32>=306
+
+# 进程管理
 psutil>=5.9.0
