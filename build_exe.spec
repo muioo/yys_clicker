@@ -3,7 +3,7 @@
 block_cipher = None
 
 a = Analysis(
-    ['hutuzudui\\main.py'],
+    ['main.py'],
     pathex=[],
     binaries=[],
     datas=[],
@@ -46,7 +46,7 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=True,  # 显示控制台窗口
+    console=False,  # 不显示控制台窗口（GUI 模式）
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
